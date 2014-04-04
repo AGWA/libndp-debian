@@ -1,0 +1,6 @@
+libndp (1.2-1) UNRELEASED; urgency=low
+
+  * Initial release (Closes: #742973)
+
+ -- Andrew Ayer <agwa@andrewayer.name>  Sat, 29 Mar 2013 10:40:30 -0700
+
