@@ -13,8 +13,10 @@ Architecture: any
 Multi-Arch: same
 Depends: libndp0 (= ${binary:Version}), ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol (debug symbols)
- libndp is a library which provides a wrapper for IPv6 Neighbor Discovery
- Protocol.
+ libndp is a library the IPv6 Neighbor Discovery Protocol (NDP).  It
+ contains functions for building and parsing NDP messages, and provides
+ a high level interface for sending and receiving NDP messages on a
+ network interface.
  .
  This package provides debug symbols.
 
@@ -24,8 +26,10 @@ Architecture: any
 Multi-Arch: same
 Depends: libndp0 (= ${binary:Version}), ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol (development files)
- libndp is a library which provides a wrapper for IPv6 Neighbor Discovery
- Protocol.
+ libndp is a library the IPv6 Neighbor Discovery Protocol (NDP).  It
+ contains functions for building and parsing NDP messages, and provides
+ a high level interface for sending and receiving NDP messages on a
+ network interface.
  .
  This package contains the development files.
 
@@ -34,8 +38,10 @@ Section: utils
 Architecture: any
 Depends: libndp0 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol (tools)
- libndp is a library which provides a wrapper for IPv6 Neighbor Discovery
- Protocol.
+ libndp is a library the IPv6 Neighbor Discovery Protocol (NDP).  It
+ contains functions for building and parsing NDP messages, and provides
+ a high level interface for sending and receiving NDP messages on a
+ network interface.
  .
  This package contains a tool named ndptool for sending and receiving
  NDP messages.
@@ -46,5 +52,7 @@ Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol
- libndp is a library which provides a wrapper for IPv6 Neighbor Discovery
- Protocol.
+ libndp is a library the IPv6 Neighbor Discovery Protocol (NDP).  It
+ contains functions for building and parsing NDP messages, and provides
+ a high level interface for sending and receiving NDP messages on a
+ network interface.
