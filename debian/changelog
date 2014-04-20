@@ -1,3 +1,9 @@
+libndp (1.2-2) unstable; urgency=low
+
+  * Fix debian/copyright to specify correct license.
+
+ -- Andrew Ayer <agwa@andrewayer.name>  Sun, 20 Apr 2014 10:13:54 -0700
+
 libndp (1.2-1) unstable; urgency=low
 
   * Initial release (Closes: #742973)
