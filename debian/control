@@ -10,6 +10,7 @@ Package: libndp-dbg
 Section: debug
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libndp0 (= ${binary:Version}), ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol (debug symbols)
  libndp is a library which provides a wrapper for IPv6 Neighbor Discovery
