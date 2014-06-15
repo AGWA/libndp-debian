@@ -1,3 +1,11 @@
+libndp (1.2-4) unstable; urgency=low
+
+  * Shorten copyright file by defining license text only once
+  * Move src package and -tools bin package to section "net"
+  * Remove unnecessary Build-Depends
+
+ -- Andrew Ayer <agwa@andrewayer.name>  Sun, 15 Jun 2014 14:41:48 -0700
+
 libndp (1.2-3) unstable; urgency=low
 
   * Make -dbg package "Multi-Arch: same"
