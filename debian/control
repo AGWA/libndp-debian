@@ -5,6 +5,8 @@ Build-Depends: debhelper (>= 9)
 Standards-Version: 3.9.5
 Section: net
 Homepage: http://libndp.org
+Vcs-Git: https://anonscm.debian.org/git/collab-maint/libndp.git
+Vcs-Browser: https://anonscm.debian.org/gitweb/?p=collab-maint/libndp.git
 
 Package: libndp-dbg
 Section: debug
