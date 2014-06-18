@@ -1,3 +1,11 @@
+libndp (1.2-5) unstable; urgency=low
+
+  * Disable silent builds so blhc can check for hardening flags
+  * Add Vcs-* headers to control file (Closes: #751999)
+  * Mark binary packages as linux-only (Closes: #752000)
+
+ -- Andrew Ayer <agwa@andrewayer.name>  Wed, 18 Jun 2014 09:59:15 -0700
+
 libndp (1.2-4) unstable; urgency=low
 
   * Shorten copyright file by defining license text only once
