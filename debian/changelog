@@ -1,3 +1,10 @@
+libndp (1.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/watch: fix rule so that correct URL is downloaded.
+
+ -- Andrew Ayer <agwa@andrewayer.name>  Mon, 30 Jun 2014 21:31:02 -0700
+
 libndp (1.2-5) unstable; urgency=low
 
   * Disable silent builds so blhc can check for hardening flags
