@@ -1,0 +1,5 @@
+Subject: Collected Debian patches for libndp
+
+This patch contains all the Debian-specific changes mixed
+together. To review them separately, please inspect the Git history at
+https://anonscm.debian.org/git/collab-maint/libndp.git
