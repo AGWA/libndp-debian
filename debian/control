@@ -11,7 +11,7 @@ Vcs-Browser: https://anonscm.debian.org/gitweb/?p=collab-maint/libndp.git
 Package: libndp-dbg
 Section: debug
 Priority: extra
-Architecture: linux-any
+Architecture: linux-any kfreebsd-any
 Multi-Arch: same
 Depends: libndp0 (= ${binary:Version}), ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol (debug symbols)
@@ -24,7 +24,7 @@ Description: Library for Neighbor Discovery Protocol (debug symbols)
 
 Package: libndp-dev
 Section: libdevel
-Architecture: linux-any
+Architecture: linux-any kfreebsd-any
 Multi-Arch: same
 Depends: libndp0 (= ${binary:Version}), ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol (development files)
@@ -36,7 +36,7 @@ Description: Library for Neighbor Discovery Protocol (development files)
  This package contains the development files.
 
 Package: libndp-tools
-Architecture: linux-any
+Architecture: linux-any kfreebsd-any
 Depends: libndp0 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: Library for Neighbor Discovery Protocol (tools)
  libndp is a library for the IPv6 Neighbor Discovery Protocol (NDP).  It
@@ -49,7 +49,7 @@ Description: Library for Neighbor Discovery Protocol (tools)
 
 Package: libndp0
 Section: libs
-Architecture: linux-any
+Architecture: linux-any kfreebsd-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
