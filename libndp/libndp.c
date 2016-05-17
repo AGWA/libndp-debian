@@ -1,6 +1,6 @@
 /*
  *   libndp.c - Neighbour discovery library
- *   Copyright (C) 2013 Jiri Pirko <jiri@resnulli.us>
+ *   Copyright (C) 2013-2015 Jiri Pirko <jiri@resnulli.us>
  *
  *   This library is free software; you can redistribute it and/or
  *   modify it under the terms of the GNU Lesser General Public
@@ -137,10 +137,10 @@ static void *myzalloc(size_t size)
 }
 
 static int myrecvfrom6(int sockfd, void *buf, size_t *buflen, int flags,
-		       struct in6_addr *addr, uint32_t *ifindex)
+		       struct in6_addr *addr, uint32_t *ifindex, int *hoplimit)
 {
 	struct sockaddr_in6 sin6;
-	unsigned char cbuf[CMSG_SPACE(sizeof(struct in6_pktinfo))];
+	unsigned char cbuf[2 * CMSG_SPACE(sizeof(struct in6_pktinfo))];
 	struct iovec iovec;
 	struct msghdr msghdr;
 	struct cmsghdr *cmsghdr;
@@ -168,13 +168,26 @@ static int myrecvfrom6(int sockfd, void *buf, size_t *buflen, int flags,
 	*ifindex = sin6.sin6_scope_id;
         for (cmsghdr = CMSG_FIRSTHDR(&msghdr); cmsghdr;
 	     cmsghdr = CMSG_NXTHDR(&msghdr, cmsghdr)) {
-		if (cmsghdr->cmsg_level == IPPROTO_IPV6 &&
-		    cmsghdr->cmsg_type == IPV6_PKTINFO &&
-		    cmsghdr->cmsg_len == CMSG_LEN(sizeof(struct in6_pktinfo))) {
-			struct in6_pktinfo *pktinfo;
+		if (cmsghdr->cmsg_level != IPPROTO_IPV6)
+			continue;
 
-			pktinfo = (struct in6_pktinfo *) CMSG_DATA(cmsghdr);
-			*ifindex = pktinfo->ipi6_ifindex;
+		switch(cmsghdr->cmsg_type) {
+		case IPV6_PKTINFO:
+			if (cmsghdr->cmsg_len == CMSG_LEN(sizeof(struct in6_pktinfo))) {
+				struct in6_pktinfo *pktinfo;
+
+				pktinfo = (struct in6_pktinfo *) CMSG_DATA(cmsghdr);
+				*ifindex = pktinfo->ipi6_ifindex;
+			}
+			break;
+		case IPV6_HOPLIMIT:
+			if (cmsghdr->cmsg_len == CMSG_LEN(sizeof(int))) {
+				int *val;
+
+				val = (int *) CMSG_DATA(cmsghdr);
+				*hoplimit = *val;
+			}
+			break;
 		}
 	}
 	*addr = sin6.sin6_addr;
@@ -249,6 +262,15 @@ static int ndp_sock_open(struct ndp *ndp)
 		goto close_sock;
 	}
 
+	val = 1;
+	ret = setsockopt(sock, IPPROTO_IPV6, IPV6_RECVHOPLIMIT,
+			 &val, sizeof(val));
+	if (ret == -1) {
+		err(ndp, "Failed to setsockopt IPV6_RECVHOPLIMIT,.");
+		err = -errno;
+		goto close_sock;
+	}
+
 	ndp->sock = sock;
 	return 0;
 close_sock:
@@ -278,7 +300,7 @@ struct ndp_msgns {
 };
 
 struct ndp_msgna {
-	struct nd_neighbor_solicit *na; /* must be first */
+	struct nd_neighbor_advert *na; /* must be first */
 };
 
 struct ndp_msgr {
@@ -291,6 +313,7 @@ struct ndp_msg {
 	size_t				len;
 	struct in6_addr			addrto;
 	uint32_t			ifindex;
+	int				hoplimit;
 	struct icmp6_hdr *		icmp6_hdr;
 	unsigned char *			opts_start; /* pointer to buf at the
 						       place where opts start */
@@ -310,6 +333,7 @@ struct ndp_msg_type_info {
 	uint8_t raw_type;
 	size_t raw_struct_size;
 	void (*addrto_adjust)(struct in6_addr *addr);
+	bool (*addrto_validate)(struct in6_addr *addr);
 };
 
 static void ndp_msg_addrto_adjust_all_nodes(struct in6_addr *addr)
@@ -336,6 +360,11 @@ static void ndp_msg_addrto_adjust_all_routers(struct in6_addr *addr)
 	addr->s6_addr32[3] = htonl(0x2);
 }
 
+static bool ndp_msg_addrto_validate_link_local(struct in6_addr *addr)
+{
+	return IN6_IS_ADDR_LINKLOCAL (addr);
+}
+
 static struct ndp_msg_type_info ndp_msg_type_info_list[] =
 {
 	[NDP_MSG_RS] = {
@@ -348,6 +377,7 @@ static struct ndp_msg_type_info ndp_msg_type_info_list[] =
 		.strabbr = "RA",
 		.raw_type = ND_ROUTER_ADVERT,
 		.raw_struct_size = sizeof(struct nd_router_advert),
+		.addrto_validate = ndp_msg_addrto_validate_link_local,
 	},
 	[NDP_MSG_NS] = {
 		.strabbr = "NS",
@@ -364,6 +394,7 @@ static struct ndp_msg_type_info ndp_msg_type_info_list[] =
 		.strabbr = "R",
 		.raw_type = ND_REDIRECT,
 		.raw_struct_size = sizeof(struct nd_redirect),
+		.addrto_validate = ndp_msg_addrto_validate_link_local,
 	},
 };
 
@@ -395,7 +426,11 @@ static bool ndp_msg_check_valid(struct ndp_msg *msg)
 
 	if (len < ndp_msg_type_info(msg_type)->raw_struct_size)
 		return false;
-	return true;
+
+	if (ndp_msg_type_info(msg_type)->addrto_validate)
+		return ndp_msg_type_info(msg_type)->addrto_validate(&msg->addrto);
+	else
+		return true;
 }
 
 static struct ndp_msg *ndp_msg_alloc(void)
@@ -676,7 +711,7 @@ struct in6_addr *ndp_msg_addrto(struct ndp_msg *msg)
  *
  * Get interface index of message.
  *
- * Returns: Inteface index
+ * Returns: Interface index
  **/
 NDP_EXPORT
 uint32_t ndp_msg_ifindex(struct ndp_msg *msg)
@@ -708,10 +743,41 @@ void ndp_msg_ifindex_set(struct ndp_msg *msg, uint32_t ifindex)
 NDP_EXPORT
 int ndp_msg_send(struct ndp *ndp, struct ndp_msg *msg)
 {
+	return ndp_msg_send_with_flags(ndp, msg, ND_OPT_NORMAL);
+}
+
+/**
+ * ndp_msg_send_with_flags:
+ * @ndp: libndp library context
+ * @msg: message structure
+ * @flags: option flags within message type
+ *
+ * Send message.
+ *
+ * Returns: zero on success or negative number in case of an error.
+ **/
+NDP_EXPORT
+int ndp_msg_send_with_flags(struct ndp *ndp, struct ndp_msg *msg, uint8_t flags)
+{
 	enum ndp_msg_type msg_type = ndp_msg_type(msg);
 
 	if (ndp_msg_type_info(msg_type)->addrto_adjust)
 		ndp_msg_type_info(msg_type)->addrto_adjust(&msg->addrto);
+
+	switch (msg_type) {
+		case NDP_MSG_NA:
+			if (flags & ND_OPT_NA_UNSOL) {
+				ndp_msgna_flag_override_set((struct ndp_msgna*)&msg->nd_msg, true);
+				ndp_msgna_flag_solicited_set((struct ndp_msgna*)&msg->nd_msg, false);
+				ndp_msg_addrto_adjust_all_nodes(&msg->addrto);
+			} else {
+				ndp_msgna_flag_solicited_set((struct ndp_msgna*)&msg->nd_msg, true);
+			}
+			break;
+		default:
+			break;
+	}
+
 	return mysendto6(ndp->sock, msg->buf, msg->len, 0,
 			 &msg->addrto, msg->ifindex);
 }
@@ -954,6 +1020,100 @@ void ndp_msgra_retransmit_time_set(struct ndp_msgra *msgra,
 				   uint32_t retransmit_time)
 {
 	msgra->ra->nd_ra_retransmit = htonl(retransmit_time);
+}
+
+
+/**
+ * SECTION: msgna getters/setters
+ * @short_description: Getters and setters for NA message
+ */
+
+/**
+ * ndp_msgna_flag_router:
+ * @msgna: NA message structure
+ *
+ * Get NA router flag.
+ *
+ * Returns: router flag.
+ **/
+NDP_EXPORT
+bool ndp_msgna_flag_router(struct ndp_msgna *msgna)
+{
+	return msgna->na->nd_na_flags_reserved & ND_NA_FLAG_ROUTER;
+}
+
+/**
+ * ndp_msgna_flag_router_set:
+ * @msgna: NA message structure
+ *
+ * Set NA router flag.
+ **/
+NDP_EXPORT
+void ndp_msgna_flag_router_set(struct ndp_msgna *msgna, bool flag_router)
+{
+	if (flag_router)
+		msgna->na->nd_na_flags_reserved |= ND_NA_FLAG_ROUTER;
+	else
+		msgna->na->nd_na_flags_reserved &= ~ND_NA_FLAG_ROUTER;
+}
+
+/**
+ * ndp_msgna_flag_solicited:
+ * @msgna: NA message structure
+ *
+ * Get NA solicited flag.
+ *
+ * Returns: solicited flag.
+ **/
+NDP_EXPORT
+bool ndp_msgna_flag_solicited(struct ndp_msgna *msgna)
+{
+	return msgna->na->nd_na_flags_reserved & ND_NA_FLAG_SOLICITED;
+}
+
+/**
+ * ndp_msgna_flag_solicited_set:
+ * @msgna: NA message structure
+ *
+ * Set NA managed flag.
+ **/
+NDP_EXPORT
+void ndp_msgna_flag_solicited_set(struct ndp_msgna *msgna, bool flag_solicited)
+{
+	if (flag_solicited)
+		msgna->na->nd_na_flags_reserved |= ND_NA_FLAG_SOLICITED;
+	else
+		msgna->na->nd_na_flags_reserved &= ~ND_NA_FLAG_SOLICITED;
+}
+
+/**
+ * ndp_msgna_flag_override:
+ * @msgna: NA message structure
+ *
+ * Get NA override flag.
+ *
+ * Returns: override flag.
+ **/
+NDP_EXPORT
+bool ndp_msgna_flag_override(struct ndp_msgna *msgna)
+{
+	return msgna->na->nd_na_flags_reserved & ND_NA_FLAG_OVERRIDE;
+}
+
+/**
+ * ndp_msgna_flag_override_set:
+ * @msgra: NA message structure
+ *
+ * Set NA override flag.
+ */
+
+NDP_EXPORT
+void ndp_msgna_flag_override_set(struct ndp_msgna *msgna, bool flag_override)
+{
+	if (flag_override)
+		msgna->na->nd_na_flags_reserved |= ND_NA_FLAG_OVERRIDE;
+	else
+		msgna->na->nd_na_flags_reserved &= ~ND_NA_FLAG_OVERRIDE;
 }
 
 
@@ -1572,13 +1732,19 @@ static int ndp_sock_recv(struct ndp *ndp)
 
 	len = ndp_msg_payload_maxlen(msg);
 	err = myrecvfrom6(ndp->sock, msg->buf, &len, 0,
-			  &msg->addrto, &msg->ifindex);
+			  &msg->addrto, &msg->ifindex, &msg->hoplimit);
 	if (err) {
 		err(ndp, "Failed to receive message");
 		goto free_msg;
 	}
-	dbg(ndp, "rcvd from: %s, ifindex: %u",
-		 str_in6_addr(&msg->addrto), msg->ifindex);
+	dbg(ndp, "rcvd from: %s, ifindex: %u, hoplimit: %d",
+		 str_in6_addr(&msg->addrto), msg->ifindex, msg->hoplimit);
+
+	if (msg->hoplimit != 255) {
+		warn(ndp, "ignoring packet with bad hop limit (%d)", msg->hoplimit);
+		err = 0;
+		goto free_msg;
+	}
 
 	if (len < sizeof(*msg->icmp6_hdr)) {
 		warn(ndp, "rcvd icmp6 packet too short (%luB)", len);
