@@ -2,7 +2,7 @@ Source: libndp
 Priority: optional
 Maintainer: Andrew Ayer <agwa@andrewayer.name>
 Build-Depends: debhelper (>= 9)
-Standards-Version: 3.9.6
+Standards-Version: 3.9.8
 Section: net
 Homepage: http://libndp.org
 Vcs-Git: https://anonscm.debian.org/git/collab-maint/libndp.git
