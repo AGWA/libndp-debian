@@ -1,6 +1,6 @@
 /*
  *   ndptool.c - Neighbour discovery tool
- *   Copyright (C) 2013 Jiri Pirko <jiri@resnulli.us>
+ *   Copyright (C) 2013-2015 Jiri Pirko <jiri@resnulli.us>
  *
  *   This library is free software; you can redistribute it and/or
  *   modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
-#include <sys/signalfd.h>
 #include <getopt.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -40,6 +39,8 @@ enum verbosity_level {
 #define DEFAULT_VERB VERB1
 static int g_verbosity = DEFAULT_VERB;
 
+static uint8_t flags = ND_OPT_NORMAL;
+
 #define pr_err(args...) fprintf(stderr, ##args)
 #define pr_outx(verb_level, args...)			\
 	do {						\
@@ -51,20 +52,44 @@ static int g_verbosity = DEFAULT_VERB;
 #define pr_out3(args...) pr_outx(VERB3, ##args)
 #define pr_out4(args...) pr_outx(VERB4, ##args)
 
+static void empty_signal_handler(int signal)
+{
+}
+
 static int run_main_loop(struct ndp *ndp)
 {
 	fd_set rfds;
 	fd_set rfds_tmp;
 	int fdmax;
 	int ret;
+	struct sigaction siginfo;
 	sigset_t mask;
-	int sfd;
 	int ndp_fd;
 	int err = 0;
+
+	sigemptyset(&siginfo.sa_mask);
+	siginfo.sa_flags = 0;
+	siginfo.sa_handler = empty_signal_handler;
+	ret = sigaction(SIGINT, &siginfo, NULL);
+	if (ret == -1) {
+		pr_err("Failed to set SIGINT handler\n");
+		return -errno;
+	}
+	ret = sigaction(SIGQUIT, &siginfo, NULL);
+	if (ret == -1) {
+		pr_err("Failed to set SIGQUIT handler\n");
+		return -errno;
+	}
+	ret = sigaction(SIGTERM, &siginfo, NULL);
+	if (ret == -1) {
+		pr_err("Failed to set SIGTERM handler\n");
+		return -errno;
+	}
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGQUIT);
+	sigaddset(&mask, SIGTERM);
 
 	ret = sigprocmask(SIG_BLOCK, &mask, NULL);
 	if (ret == -1) {
@@ -72,51 +97,23 @@ static int run_main_loop(struct ndp *ndp)
 		return -errno;
 	}
 
-	sfd = signalfd(-1, &mask, 0);
-	if (sfd == -1) {
-		pr_err("Failed to open signalfd\n");
-		return -errno;
-	}
+	sigemptyset(&mask);
 
 	FD_ZERO(&rfds);
-	FD_SET(sfd, &rfds);
-	fdmax = sfd;
-
 	ndp_fd = ndp_get_eventfd(ndp);
 	FD_SET(ndp_fd, &rfds);
-	if (ndp_fd > fdmax)
-		fdmax = ndp_fd;
-	fdmax++;
+	fdmax = ndp_fd + 1;
 
 	for (;;) {
 		rfds_tmp = rfds;
-		ret = select(fdmax, &rfds_tmp, NULL, NULL, NULL);
+		ret = pselect(fdmax, &rfds_tmp, NULL, NULL, NULL, &mask);
 		if (ret == -1) {
+			if (errno == EINTR) {
+				goto out;
+			}
 			pr_err("Select failed\n");
 			err = -errno;
 			goto out;
-		}
-		if (FD_ISSET(sfd, &rfds_tmp)) {
-			struct signalfd_siginfo fdsi;
-			ssize_t len;
-
-			len = read(sfd, &fdsi, sizeof(struct signalfd_siginfo));
-		        if (len != sizeof(struct signalfd_siginfo)) {
-				pr_err("Unexpected data length came from signalfd\n");
-				err = -EINVAL;
-				goto out;
-			}
-			switch (fdsi.ssi_signo) {
-			case SIGINT:
-			case SIGQUIT:
-			case SIGTERM:
-				goto out;
-			default:
-				pr_err("Read unexpected signal\n");
-				err = -EINVAL;
-				goto out;
-			}
-
 		}
 		if (FD_ISSET(ndp_fd, &rfds_tmp)) {
 			err = ndp_call_eventfd_handler(ndp);
@@ -127,7 +124,6 @@ static int run_main_loop(struct ndp *ndp)
 		}
 	}
 out:
-	close(sfd);
 	return err;
 }
 
@@ -139,6 +135,7 @@ static void print_help(const char *argv0) {
             "\t-t --msg-type=TYPE       Specify message type\n"
 	    "\t                         (\"rs\", \"ra\", \"ns\", \"na\")\n"
             "\t-i --ifname=IFNAME       Specify interface name\n"
+            "\t-U --unsolicited         Send Unsolicited NA\n"
 	    "Available commands:\n"
 	    "\tmonitor\n"
 	    "\tsend\n",
@@ -346,7 +343,8 @@ static int run_cmd_send(struct ndp *ndp, enum ndp_msg_type msg_type,
 		return err;
 	}
 	ndp_msg_ifindex_set(msg, ifindex);
-	err = ndp_msg_send(ndp, msg);
+
+	err = ndp_msg_send_with_flags(ndp, msg, flags);
 	if (err) {
 		pr_err("Failed to send message\n");
 		goto msg_destroy;
@@ -385,6 +383,7 @@ int main(int argc, char **argv)
 		{ "verbose",	no_argument,		NULL, 'v' },
 		{ "msg-type",	required_argument,	NULL, 't' },
 		{ "ifname",	required_argument,	NULL, 'i' },
+		{ "unsolicited",no_argument,		NULL, 'U' },
 		{ NULL, 0, NULL, 0 }
 	};
 	int opt;
@@ -397,7 +396,7 @@ int main(int argc, char **argv)
 	int err;
 	int res = EXIT_FAILURE;
 
-	while ((opt = getopt_long(argc, argv, "hvt:i:",
+	while ((opt = getopt_long(argc, argv, "hvt:i:U",
 				  long_options, NULL)) >= 0) {
 
 		switch(opt) {
@@ -414,6 +413,9 @@ int main(int argc, char **argv)
 		case 'i':
 			free(ifname);
 			ifname = strdup(optarg);
+			break;
+		case 'U':
+			flags |= ND_OPT_NA_UNSOL;
 			break;
 		case '?':
 			pr_err("unknown option.\n");
