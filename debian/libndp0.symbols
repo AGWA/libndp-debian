@@ -37,8 +37,15 @@ libndp.so.0 libndp0 #MINVER#
  ndp_msg_payload_opts@Base 1.2
  ndp_msg_payload_opts_len@Base 1.2
  ndp_msg_send@Base 1.2
+ ndp_msg_send_with_flags@Base 1.6
  ndp_msg_type@Base 1.2
  ndp_msgna@Base 1.2
+ ndp_msgna_flag_override@Base 1.6
+ ndp_msgna_flag_override_set@Base 1.6
+ ndp_msgna_flag_router@Base 1.6
+ ndp_msgna_flag_router_set@Base 1.6
+ ndp_msgna_flag_solicited@Base 1.6
+ ndp_msgna_flag_solicited_set@Base 1.6
  ndp_msgns@Base 1.2
  ndp_msgr@Base 1.2
  ndp_msgra@Base 1.2
