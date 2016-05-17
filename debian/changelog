@@ -1,3 +1,11 @@
+libndp (1.6-1) unstable; urgency=high
+
+  * New upstream release. Fixes CVE-2016-3698. (Closes: #824545, #781755)
+  * Drop kfreebsd patch, since it has been merged upstream.
+  * Bump Standards-Version to 3.9.8 (no changes needed)
+
+ -- Andrew Ayer <agwa@andrewayer.name>  Tue, 17 May 2016 09:20:12 -0700
+
 libndp (1.4-2) unstable; urgency=medium
 
   * Remove single-debian-patch option
